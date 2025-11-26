@@ -11,9 +11,11 @@ TWSE台股股價接入Homeassistant
 
 大盤顯示單位points;個股顯示單位TWD
 
-只要這個接口可以查詢到的股票代號，就可以接入
+只要這個接口可以查詢到的股票代號，就沒有問題
 
 開啟接口網址後，修改t00(下圖紅框標示)成其他股票代號如果可以查詢到，就可以接入。
+
+在HA中可以一次新增一檔股票，或是一次新增多檔，在輸入股票代號的時候用逗號隔開即可
 
 
  <img src="https://github.com/shihkefa/twse_stock/blob/main/API.png?raw=true" width="800">
