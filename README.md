@@ -3,7 +3,7 @@ TWSE台股股價接入Homeassistant
 
 是透過台灣證券交易所公開的接口將資料導入
 
-例如大牌指數代號t00
+例如大盤指數代號t00
 
 接口網址:https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_t00.tw&json=1&delay=0
 
