@@ -1,0 +1,10 @@
+{
+  "name": "twse_stock",
+  "domain": "twse_stock",
+  "country": "worldwide",
+  "homeassistant": "2023.1.0",
+  "render_readme": true,
+  "zip_release": false,
+  "filename": "custom_components/twse_stock",
+  "source": "https://github.com/shihkefa/twse_stock"
+}
