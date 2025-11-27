@@ -77,6 +77,7 @@ class TWSECoordinator(DataUpdateCoordinator):
                     if stock_code == "tw00":
                         stock_code = "t00"
 
+                    # 先抓上市 (TSE)
                     url = (
                         "https://mis.twse.com.tw/stock/api/getStockInfo.jsp"
                         f"?ex_ch=tse_{stock_code}.tw&json=1&delay=0"
@@ -101,7 +102,26 @@ class TWSECoordinator(DataUpdateCoordinator):
                             continue
 
                         msg_array = data.get("msgArray", [])
-                        results[stock] = msg_array[0] if msg_array else None
+                        info = msg_array[0] if msg_array else None
+
+                        # 如果 n 欄位沒名字，改抓 OTC
+                        if info and not info.get("n"):
+                            url_otc = (
+                                "https://mis.twse.com.tw/stock/api/getStockInfo.jsp"
+                                f"?ex_ch=otc_{stock_code}.tw&json=1&delay=0"
+                            )
+                            async with async_timeout.timeout(10):
+                                resp_otc = await session.get(url_otc, headers=headers)
+                                if resp_otc.status == 200:
+                                    try:
+                                        data_otc = await resp_otc.json(content_type=None)
+                                        msg_array_otc = data_otc.get("msgArray", [])
+                                        if msg_array_otc:
+                                            info = msg_array_otc[0]
+                                    except Exception:
+                                        pass
+
+                        results[stock] = info
 
         except Exception as err:
             raise UpdateFailed(f"TWSE fetch failed: {err}") from err
@@ -143,15 +163,14 @@ class TWSEStockSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        """主狀態：股價"""
+        """主狀態：股價（float 或 None）"""
         item = self._coordinator.data.get(self._stock)
 
-        # 無資料 → 用最後值
         if not item:
-            return self._last_value or "更新中"
+            return None  # HA numeric sensor 避免報錯
 
         # ---------------------------
-        # tw00：維持原邏輯
+        # tw00 大盤
         # ---------------------------
         if self._stock == "t00":
             z_value = item.get("z")
@@ -160,14 +179,13 @@ class TWSEStockSensor(CoordinatorEntity, SensorEntity):
                     self._last_value = float(z_value)
                 except:
                     pass
-            return self._last_value or "更新中"
+            return self._last_value
 
         # ---------------------------
-        # 個股邏輯（依照你的最終需求）
+        # 個股邏輯
         # ---------------------------
         z_value = item.get("z")
 
-        # ✔ Z 有值 → 使用 Z
         if z_value and z_value != "-":
             try:
                 self._last_value = float(z_value)
@@ -175,18 +193,29 @@ class TWSEStockSensor(CoordinatorEntity, SensorEntity):
             except:
                 pass
 
-        # ✔ Z 沒值 → 沒抓過 → 顯示 “更新中”
+        # 第一次沒抓到 → state = None
         if self._last_value is None:
-            return "更新中"
+            return None
 
-        # ✔ Z 沒值 → 有抓過 → 維持前次值
+        # 之後沒抓到 → 維持前次數值
         return self._last_value
 
     @property
     def extra_state_attributes(self):
+        """全部原始欄位 + 狀態文字"""
         item = self._coordinator.data.get(self._stock)
         if not item:
-            return {}
+            return {
+                "status": "更新中",
+                "last_value": self._last_value,
+                "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+
+        z_value = item.get("z")
+        if z_value and z_value != "-":
+            status = "正常"
+        else:
+            status = "維持前次值" if self._last_value is not None else "更新中"
 
         return {
             "name": item.get("n") or item.get("c"),
@@ -199,6 +228,7 @@ class TWSEStockSensor(CoordinatorEntity, SensorEntity):
             "change": item.get("d"),
             "change_percent": item.get("p"),
             "last_value": self._last_value,
+            "status": status,
             "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
 
